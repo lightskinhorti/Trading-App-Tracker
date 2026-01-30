@@ -9,8 +9,14 @@ import ta
 import random
 import os
 
-# Flag para usar datos mock cuando las APIs externas no están disponibles
-USE_MOCK_DATA = os.environ.get("USE_MOCK_DATA", "false").lower() == "true"
+# Usar datos mock por defecto para desarrollo rápido
+# En producción con acceso a internet, cambiar a "false"
+USE_MOCK_DATA = os.environ.get("USE_MOCK_DATA", "true").lower() == "true"
+
+# Caché simple para evitar regenerar datos
+_price_cache = {}
+_history_cache = {}
+CACHE_TTL = 60  # segundos
 
 
 class PriceService:
@@ -81,28 +87,43 @@ class PriceService:
         return prices
 
     def _get_mock_price(self, symbol: str, asset_type: str) -> Dict:
-        """Genera precio mock para desarrollo"""
+        """Genera precio mock para desarrollo con caché"""
+        global _price_cache
         symbol_upper = symbol.upper()
+        cache_key = f"price_{symbol_upper}"
+        now = datetime.now().timestamp()
+
+        # Usar caché si existe y no ha expirado
+        if cache_key in _price_cache:
+            cached_data, cached_time = _price_cache[cache_key]
+            if now - cached_time < CACHE_TTL:
+                return cached_data
+
         if symbol_upper in self._mock_base_prices:
             data = self._mock_base_prices[symbol_upper]
             base_price = data["price"]
+            name = data["name"]
         else:
             base_price = random.uniform(10, 500)
-            data = {"name": symbol_upper, "type": asset_type}
+            name = symbol_upper
 
         daily_change_pct = random.uniform(-5, 5)
         daily_change = base_price * daily_change_pct / 100
         current_price = base_price + daily_change
 
-        return {
+        result = {
             "symbol": symbol_upper,
-            "name": data["name"],
+            "name": name,
             "current_price": round(current_price, 2),
             "previous_close": round(base_price, 2),
             "daily_change": round(daily_change, 2),
             "daily_change_percent": round(daily_change_pct, 2),
             "currency": "USD"
         }
+
+        # Guardar en caché
+        _price_cache[cache_key] = (result, now)
+        return result
 
     def get_stock_price(self, symbol: str) -> dict:
         """Obtiene precio actual de una acción via Yahoo Finance"""
@@ -230,8 +251,18 @@ class PriceService:
             return []
 
     def _get_mock_history_data(self, symbol: str, period: str, asset_type: str) -> Dict:
-        """Genera datos históricos mock completos con indicadores"""
+        """Genera datos históricos mock completos con indicadores (con caché)"""
+        global _history_cache
         symbol_upper = symbol.upper()
+        cache_key = f"history_{symbol_upper}_{period}"
+        now = datetime.now().timestamp()
+
+        # Usar caché si existe y no ha expirado (5 minutos para históricos)
+        if cache_key in _history_cache:
+            cached_data, cached_time = _history_cache[cache_key]
+            if now - cached_time < 300:  # 5 minutos
+                return cached_data
+
         if symbol_upper in self._mock_base_prices:
             base_price = self._mock_base_prices[symbol_upper]["price"]
         else:
@@ -244,12 +275,16 @@ class PriceService:
         df["Close"] = df["close"]
         indicators = self._calculate_indicators(df)
 
-        return {
+        result = {
             "symbol": symbol_upper,
             "period": period,
             "prices": prices,
             "indicators": indicators
         }
+
+        # Guardar en caché
+        _history_cache[cache_key] = (result, now)
+        return result
 
     def _period_to_yf(self, period: str) -> str:
         """Convierte periodo a formato yfinance"""
