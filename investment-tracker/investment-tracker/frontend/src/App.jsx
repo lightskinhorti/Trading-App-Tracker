@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, TrendingUp, BarChart2, Activity, X } from 'lucide-react';
+import { Plus, RefreshCw, TrendingUp, BarChart2, Activity, X, Bell, Brain, Grid3X3 } from 'lucide-react';
 import { assetsApi } from './services/api';
 import PortfolioSummary from './components/PortfolioSummary';
 import AssetList from './components/AssetList';
@@ -7,6 +7,9 @@ import AddAssetModal from './components/AddAssetModal';
 import PriceChart from './components/PriceChart';
 import PortfolioChart from './components/PortfolioChart';
 import TechnicalIndicators from './components/TechnicalIndicators';
+import AlertsManager from './components/AlertsManager';
+import PredictionChart from './components/PredictionChart';
+import CorrelationMatrix from './components/CorrelationMatrix';
 
 function App() {
   const [portfolio, setPortfolio] = useState(null);
@@ -93,9 +96,9 @@ function App() {
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-gray-800/50 border-b border-gray-700">
+      <nav className="bg-gray-800/50 border-b border-gray-700 overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-max">
             <button
               onClick={() => setActiveTab('portfolio')}
               className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
@@ -129,6 +132,39 @@ function App() {
             >
               <Activity className="w-4 h-4" />
               Benchmarks
+            </button>
+            <button
+              onClick={() => setActiveTab('predictions')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
+                activeTab === 'predictions'
+                  ? 'border-purple-500 text-purple-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Brain className="w-4 h-4" />
+              Predicciones
+            </button>
+            <button
+              onClick={() => setActiveTab('correlation')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
+                activeTab === 'correlation'
+                  ? 'border-cyan-500 text-cyan-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Grid3X3 className="w-4 h-4" />
+              Correlación
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
+                activeTab === 'alerts'
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Bell className="w-4 h-4" />
+              Alertas
             </button>
           </div>
         </div>
@@ -215,6 +251,61 @@ function App() {
             {/* Benchmarks Tab */}
             {activeTab === 'benchmarks' && (
               <PortfolioChart />
+            )}
+
+            {/* Predictions Tab */}
+            {activeTab === 'predictions' && (
+              <div className="space-y-6">
+                {selectedAsset ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-bold">Predicción ML - {selectedAsset.symbol}</h2>
+                      <button
+                        onClick={() => setSelectedAsset(null)}
+                        className="flex items-center gap-2 text-gray-400 hover:text-gray-200 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                        Cerrar
+                      </button>
+                    </div>
+                    <PredictionChart asset={selectedAsset} />
+                  </>
+                ) : (
+                  <div className="bg-gray-800 rounded-xl p-12 text-center">
+                    <Brain className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+                    <p className="text-gray-400 text-lg">Selecciona un activo para ver predicciones</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Las predicciones usan Machine Learning para estimar precios futuros
+                    </p>
+                    {portfolio?.assets?.length > 0 && (
+                      <div className="mt-6">
+                        <p className="text-gray-400 text-sm mb-3">Selecciona un activo:</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {portfolio.assets.map((asset) => (
+                            <button
+                              key={asset.id}
+                              onClick={() => setSelectedAsset(asset)}
+                              className="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              {asset.symbol}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Correlation Tab */}
+            {activeTab === 'correlation' && (
+              <CorrelationMatrix />
+            )}
+
+            {/* Alerts Tab */}
+            {activeTab === 'alerts' && (
+              <AlertsManager portfolio={portfolio} />
             )}
           </>
         )}

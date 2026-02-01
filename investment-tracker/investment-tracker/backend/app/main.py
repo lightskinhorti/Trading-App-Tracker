@@ -2,12 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import init_db
-from .routes import assets_router
+from .routes import assets_router, alerts_router, analysis_router
 
 app = FastAPI(
     title="Investment Tracker API",
-    description="API para gestionar portfolio de inversiones",
-    version="1.0.0"
+    description="API para gestionar portfolio de inversiones con ML y alertas",
+    version="3.0.0"
 )
 
 # CORS para permitir peticiones desde React
@@ -21,6 +21,8 @@ app.add_middleware(
 
 # Incluir rutas
 app.include_router(assets_router, prefix="/api")
+app.include_router(alerts_router, prefix="/api")
+app.include_router(analysis_router, prefix="/api")
 
 
 @app.on_event("startup")
