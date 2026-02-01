@@ -2,16 +2,52 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from sklearn.linear_model import Ridge, Lasso
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from scipy import stats
 import warnings
+
+# Try to import sklearn - provide fallback if not available
+try:
+    from sklearn.linear_model import Ridge, Lasso
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+    from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    print("Warning: sklearn not available. Using simple prediction model.")
+
+# Try to import scipy - optional
+try:
+    from scipy import stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    print("Warning: scipy not available.")
 
 from .price_service import price_service
 
 warnings.filterwarnings('ignore')
+
+
+class SimpleScaler:
+    """Fallback scaler when sklearn is not available"""
+    def __init__(self):
+        self.mean_ = None
+        self.std_ = None
+
+    def fit_transform(self, X):
+        X = np.array(X)
+        self.mean_ = np.mean(X, axis=0)
+        self.std_ = np.std(X, axis=0)
+        self.std_[self.std_ == 0] = 1  # Avoid division by zero
+        return (X - self.mean_) / self.std_
+
+    def transform(self, X):
+        X = np.array(X)
+        return (X - self.mean_) / self.std_
+
+    def inverse_transform(self, X):
+        X = np.array(X)
+        return X * self.std_ + self.mean_
 
 
 class MLService:
@@ -27,8 +63,12 @@ class MLService:
     """
 
     def __init__(self):
-        self.scaler_X = StandardScaler()
-        self.scaler_y = StandardScaler()
+        if SKLEARN_AVAILABLE:
+            self.scaler_X = StandardScaler()
+            self.scaler_y = StandardScaler()
+        else:
+            self.scaler_X = SimpleScaler()
+            self.scaler_y = SimpleScaler()
         self.confidence_threshold = 0.6
 
     def _preprocess_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
@@ -249,29 +289,62 @@ class MLService:
             X_scaled = self.scaler_X.fit_transform(X)
             y_scaled = self.scaler_y.fit_transform(y.reshape(-1, 1)).flatten()
 
-            # 7. Entrenar modelo con regularización (Ridge)
-            # Alpha alto para evitar overfitting en series temporales
-            model = Ridge(alpha=1.0)
-            model.fit(X_scaled, y_scaled)
+            if SKLEARN_AVAILABLE:
+                # 7. Entrenar modelo con regularización (Ridge)
+                # Alpha alto para evitar overfitting en series temporales
+                model = Ridge(alpha=1.0)
+                model.fit(X_scaled, y_scaled)
 
-            # 8. Validación cruzada temporal
-            n_splits = min(5, len(df_train) // 10)
-            if n_splits >= 2:
-                tscv = TimeSeriesSplit(n_splits=n_splits)
-                cv_scores = cross_val_score(model, X_scaled, y_scaled, cv=tscv, scoring='r2')
-                cv_r2 = np.mean(cv_scores)
-                cv_std = np.std(cv_scores)
+                # 8. Validación cruzada temporal
+                n_splits = min(5, len(df_train) // 10)
+                if n_splits >= 2:
+                    tscv = TimeSeriesSplit(n_splits=n_splits)
+                    cv_scores = cross_val_score(model, X_scaled, y_scaled, cv=tscv, scoring='r2')
+                    cv_r2 = np.mean(cv_scores)
+                    cv_std = np.std(cv_scores)
+                else:
+                    cv_r2 = None
+                    cv_std = None
+
+                # 9. Calcular métricas de entrenamiento
+                y_pred_scaled = model.predict(X_scaled)
+                y_pred = self.scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+
+                train_r2 = r2_score(y, y_pred)
+                train_rmse = np.sqrt(mean_squared_error(y, y_pred))
+                train_mae = mean_absolute_error(y, y_pred)
             else:
+                # Fallback: Simple linear regression using numpy
+                model = None
                 cv_r2 = None
                 cv_std = None
 
-            # 9. Calcular métricas de entrenamiento
-            y_pred_scaled = model.predict(X_scaled)
-            y_pred = self.scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+                # Simple linear fit on 'days' feature
+                days_idx = feature_cols.index('days') if 'days' in feature_cols else 0
+                x_days = X[:, days_idx]
 
-            train_r2 = r2_score(y, y_pred)
-            train_rmse = np.sqrt(mean_squared_error(y, y_pred))
-            train_mae = mean_absolute_error(y, y_pred)
+                # Linear regression coefficients
+                n = len(x_days)
+                x_mean = np.mean(x_days)
+                y_mean = np.mean(y)
+
+                numerator = np.sum((x_days - x_mean) * (y - y_mean))
+                denominator = np.sum((x_days - x_mean) ** 2)
+
+                self._simple_slope = numerator / denominator if denominator != 0 else 0
+                self._simple_intercept = y_mean - self._simple_slope * x_mean
+                self._days_idx = days_idx
+
+                y_pred = self._simple_slope * x_days + self._simple_intercept
+
+                # Calculate R² manually
+                ss_res = np.sum((y - y_pred) ** 2)
+                ss_tot = np.sum((y - y_mean) ** 2)
+                train_r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+
+                # Calculate RMSE and MAE manually
+                train_rmse = np.sqrt(np.mean((y - y_pred) ** 2))
+                train_mae = np.mean(np.abs(y - y_pred))
 
             # 10. Calcular residuos para intervalos de confianza
             residuals = y - y_pred
@@ -329,11 +402,16 @@ class MLService:
 
                 # Crear vector de features
                 X_future = np.array([[future_features.get(col, 0) for col in feature_cols]])
-                X_future_scaled = self.scaler_X.transform(X_future)
 
                 # Predecir
-                y_future_scaled = model.predict(X_future_scaled)
-                y_future = self.scaler_y.inverse_transform(y_future_scaled.reshape(-1, 1)).flatten()[0]
+                if SKLEARN_AVAILABLE and model is not None:
+                    X_future_scaled = self.scaler_X.transform(X_future)
+                    y_future_scaled = model.predict(X_future_scaled)
+                    y_future = self.scaler_y.inverse_transform(y_future_scaled.reshape(-1, 1)).flatten()[0]
+                else:
+                    # Simple prediction using linear model
+                    future_days = future_features.get('days', last_row['days'] + i)
+                    y_future = self._simple_slope * future_days + self._simple_intercept
 
                 # Asegurar precio positivo
                 y_future = max(0.01, y_future)
@@ -384,8 +462,8 @@ class MLService:
                 "features_used": feature_cols,
                 "data_points": len(df_train),
                 "warnings": result["warnings"] if result["warnings"] else None,
-                "model": "Ridge Regression",
-                "regularization": "L2 (alpha=1.0)"
+                "model": "Ridge Regression" if SKLEARN_AVAILABLE else "Simple Linear Regression",
+                "regularization": "L2 (alpha=1.0)" if SKLEARN_AVAILABLE else "None"
             }
 
         except ValueError as e:
