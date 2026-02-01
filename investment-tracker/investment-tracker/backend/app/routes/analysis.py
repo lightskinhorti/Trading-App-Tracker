@@ -16,11 +16,17 @@ def get_price_prediction(
     days: int = Query(7, ge=1, le=30, description="Días a predecir (1-30)")
 ):
     """
-    Obtiene predicción de precios usando ML (regresión polinomial)
+    Obtiene predicción de precios usando ML (Ridge Regression con regularización)
 
     - **symbol**: Símbolo del activo (ej: AAPL, BTC)
     - **asset_type**: Tipo de activo (stock o crypto)
     - **days**: Número de días a predecir (máximo 30)
+
+    El modelo incluye:
+    - Preprocesamiento robusto (manejo de nulos, outliers)
+    - Features de series temporales (lags, rolling stats, momentum)
+    - Validación cruzada temporal
+    - Intervalos de confianza
     """
     prediction = ml_service.predict_prices(
         symbol=symbol,
@@ -29,10 +35,11 @@ def get_price_prediction(
         history_period="3M"
     )
 
-    if not prediction:
+    # Verificar si hay error en la respuesta
+    if prediction.get("error"):
         raise HTTPException(
-            status_code=404,
-            detail=f"No se pudo generar predicción para {symbol}"
+            status_code=400,
+            detail=prediction["error"]
         )
 
     return prediction
@@ -54,10 +61,11 @@ def get_trend_analysis(
     """
     analysis = ml_service.get_trend_analysis(symbol, asset_type)
 
-    if not analysis:
+    # Verificar si hay error en la respuesta
+    if analysis.get("error"):
         raise HTTPException(
-            status_code=404,
-            detail=f"No se pudo analizar tendencia para {symbol}"
+            status_code=400,
+            detail=analysis["error"]
         )
 
     return analysis
@@ -91,10 +99,11 @@ def calculate_correlation(
 
     correlation = ml_service.calculate_correlation_matrix(assets, period)
 
-    if not correlation:
+    # Verificar si hay error en la respuesta
+    if correlation.get("error"):
         raise HTTPException(
-            status_code=500,
-            detail="Error al calcular correlación"
+            status_code=400,
+            detail=correlation["error"]
         )
 
     return correlation
@@ -122,10 +131,11 @@ def get_portfolio_correlation(
 
     correlation = ml_service.calculate_correlation_matrix(asset_list, period)
 
-    if not correlation:
+    # Verificar si hay error en la respuesta
+    if correlation.get("error"):
         raise HTTPException(
-            status_code=500,
-            detail="Error al calcular correlación del portfolio"
+            status_code=400,
+            detail=correlation["error"]
         )
 
     return correlation
