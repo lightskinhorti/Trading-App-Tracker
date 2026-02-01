@@ -5,9 +5,16 @@ import httpx
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import ta
 import random
 import os
+
+# Try to import ta library, provide fallback if not available
+try:
+    import ta
+    TA_AVAILABLE = True
+except ImportError:
+    TA_AVAILABLE = False
+    print("Warning: ta library not available. Using manual indicator calculations.")
 
 # Usar datos mock por defecto para desarrollo rápido
 # En producción con acceso a internet, cambiar a "false"
@@ -417,6 +424,15 @@ class PriceService:
             print(f"Using mock history data for {symbol}")
             return self._get_mock_history_data(symbol, period, "crypto")
 
+    def _calculate_rsi_manual(self, prices: pd.Series, window: int = 14) -> pd.Series:
+        """Calculate RSI manually without ta library"""
+        delta = prices.diff()
+        gain = delta.where(delta > 0, 0).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss.replace(0, np.nan)
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
     def _calculate_indicators(self, df: pd.DataFrame) -> Dict:
         """Calcula indicadores técnicos (SMA, RSI)"""
         indicators = {
@@ -435,12 +451,16 @@ class PriceService:
             if len(close_prices) < 14:
                 return indicators
 
-            # SMA 20 y 50
-            sma20 = ta.trend.sma_indicator(close_prices, window=20)
-            sma50 = ta.trend.sma_indicator(close_prices, window=50)
-
-            # RSI
-            rsi = ta.momentum.rsi(close_prices, window=14)
+            if TA_AVAILABLE:
+                # Use ta library
+                sma20 = ta.trend.sma_indicator(close_prices, window=20)
+                sma50 = ta.trend.sma_indicator(close_prices, window=50)
+                rsi = ta.momentum.rsi(close_prices, window=14)
+            else:
+                # Manual calculations
+                sma20 = close_prices.rolling(window=20).mean()
+                sma50 = close_prices.rolling(window=50).mean()
+                rsi = self._calculate_rsi_manual(close_prices, window=14)
 
             # Valores actuales
             indicators["current_sma20"] = float(sma20.iloc[-1]) if not pd.isna(sma20.iloc[-1]) else None
