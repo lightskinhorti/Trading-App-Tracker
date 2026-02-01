@@ -96,9 +96,9 @@ function App() {
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-gray-800/50 border-b border-gray-700">
+      <nav className="bg-gray-800/50 border-b border-gray-700 overflow-x-auto">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-max">
             <button
               onClick={() => setActiveTab('portfolio')}
               className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
