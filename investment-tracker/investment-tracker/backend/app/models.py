@@ -2,10 +2,18 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+from pathlib import Path
 import enum
 import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./portfolio.db")
+
+# Create data directory if using SQLite with relative path
+if "sqlite" in DATABASE_URL:
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    if db_path.startswith("./"):
+        db_dir = Path(db_path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

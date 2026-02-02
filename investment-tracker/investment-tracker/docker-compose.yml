@@ -7,9 +7,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./portfolio.db
+      - DATABASE_URL=sqlite:///./data/portfolio.db
+      - USE_MOCK_DATA=true
     volumes:
-      - backend-data:/app
+      - backend-data:/app/data
     restart: unless-stopped
 
   frontend:
