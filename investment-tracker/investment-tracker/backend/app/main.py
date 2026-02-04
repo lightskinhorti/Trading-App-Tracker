@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .models import init_db
-from .routes import assets_router, alerts_router, analysis_router
+from .routes import assets_router, alerts_router, analysis_router, popular_router
 
 app = FastAPI(
     title="Investment Tracker API",
@@ -23,6 +23,7 @@ app.add_middleware(
 app.include_router(assets_router, prefix="/api")
 app.include_router(alerts_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(popular_router, prefix="/api")
 
 
 @app.on_event("startup")

@@ -1,5 +1,6 @@
 from .assets import router as assets_router
 from .alerts import router as alerts_router
+from .popular import router as popular_router
 
 # Import analysis router with error handling to diagnose issues
 try:

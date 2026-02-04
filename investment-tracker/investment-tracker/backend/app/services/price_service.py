@@ -228,34 +228,121 @@ class PriceService:
             return self.get_stock_price(symbol)
 
     def search_stock(self, query: str) -> list:
-        """Busca acciones por nombre o símbolo"""
+        """Busca acciones por nombre o símbolo usando yfinance"""
+        results = []
+        query_upper = query.upper()
+
+        # Si usamos mock data, buscar en nuestro diccionario de stocks conocidos
+        if USE_MOCK_DATA:
+            for symbol, data in self._mock_base_prices.items():
+                if data.get("type") == "stock":
+                    if query_upper in symbol or query.lower() in data["name"].lower():
+                        results.append({
+                            "symbol": symbol,
+                            "name": data["name"],
+                            "type": "stock"
+                        })
+            return results[:10]
+
         try:
-            ticker = yf.Ticker(query)
+            # Intentar buscar directamente el símbolo
+            ticker = yf.Ticker(query_upper)
             info = ticker.info
+
             if info.get("shortName"):
-                return [{
-                    "symbol": query.upper(),
+                results.append({
+                    "symbol": query_upper,
                     "name": info.get("shortName", query),
-                    "type": "stock"
-                }]
-            return []
-        except:
-            return []
+                    "type": "stock",
+                    "exchange": info.get("exchange", ""),
+                    "market_cap": info.get("marketCap", 0)
+                })
+
+            # Intentar buscar como término usando search de yfinance si está disponible
+            try:
+                search_results = yf.Tickers(query_upper)
+                if hasattr(search_results, 'tickers'):
+                    for sym, tick in list(search_results.tickers.items())[:5]:
+                        if sym != query_upper:
+                            tick_info = tick.info
+                            if tick_info.get("shortName"):
+                                results.append({
+                                    "symbol": sym,
+                                    "name": tick_info.get("shortName", sym),
+                                    "type": "stock"
+                                })
+            except:
+                pass
+
+        except Exception as e:
+            print(f"Error searching stock {query}: {e}")
+            # Fallback a lista de stocks populares que coincidan
+            popular_stocks = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX", "AMD", "INTC"]
+            for symbol in popular_stocks:
+                if query_upper in symbol:
+                    if symbol in self._mock_base_prices:
+                        results.append({
+                            "symbol": symbol,
+                            "name": self._mock_base_prices[symbol]["name"],
+                            "type": "stock"
+                        })
+
+        return results[:10]
 
     def search_crypto(self, query: str) -> list:
-        """Busca cryptos por nombre o símbolo"""
+        """Busca cryptos por nombre o símbolo usando CoinGecko"""
+        query_upper = query.upper()
+
+        # Si usamos mock data, buscar en nuestro diccionario
+        if USE_MOCK_DATA:
+            results = []
+            for symbol, data in self._mock_base_prices.items():
+                if data.get("type") == "crypto":
+                    if query_upper in symbol or query.lower() in data["name"].lower():
+                        results.append({
+                            "symbol": symbol,
+                            "name": data["name"],
+                            "type": "crypto"
+                        })
+            return results[:10]
+
         try:
             search_results = self.cg.search(query)
-            coins = search_results.get("coins", [])[:5]
+            coins = search_results.get("coins", [])[:10]
             return [{
                 "symbol": coin.get("symbol", "").upper(),
                 "name": coin.get("name", ""),
                 "type": "crypto",
-                "coin_id": coin.get("id")
+                "coin_id": coin.get("id"),
+                "thumb": coin.get("thumb", "")
             } for coin in coins]
         except Exception as e:
             print(f"Error searching crypto: {e}")
-            return []
+            # Fallback a cryptos conocidas
+            results = []
+            for symbol, data in self._mock_base_prices.items():
+                if data.get("type") == "crypto":
+                    if query_upper in symbol or query.lower() in data["name"].lower():
+                        results.append({
+                            "symbol": symbol,
+                            "name": data["name"],
+                            "type": "crypto"
+                        })
+            return results[:10]
+
+    def search_assets(self, query: str, asset_type: str = None) -> list:
+        """Busca activos de cualquier tipo"""
+        results = []
+
+        if asset_type == "crypto":
+            results = self.search_crypto(query)
+        elif asset_type == "stock":
+            results = self.search_stock(query)
+        else:
+            # Buscar en ambos tipos
+            results = self.search_stock(query) + self.search_crypto(query)
+
+        return results[:10]
 
     def _get_mock_history_data(self, symbol: str, period: str, asset_type: str) -> Dict:
         """Genera datos históricos mock completos con indicadores (con caché)"""

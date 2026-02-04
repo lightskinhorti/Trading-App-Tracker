@@ -10,6 +10,7 @@ import TechnicalIndicators from './components/TechnicalIndicators';
 import AlertsManager from './components/AlertsManager';
 import PredictionChart from './components/PredictionChart';
 import CorrelationMatrix from './components/CorrelationMatrix';
+import PopularAssets from './components/PopularAssets';
 
 function App() {
   const [portfolio, setPortfolio] = useState(null);
@@ -188,6 +189,13 @@ function App() {
             {activeTab === 'portfolio' && portfolio && (
               <>
                 <PortfolioSummary portfolio={portfolio} />
+
+                {/* Activos Populares */}
+                <div className="mt-6">
+                  <PopularAssets onAddAsset={() => setIsModalOpen(true)} />
+                </div>
+
+                {/* Tus Activos */}
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-gray-200">Tus Activos</h2>

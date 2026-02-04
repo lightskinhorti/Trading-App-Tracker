@@ -22,9 +22,12 @@ export const assetsApi = {
   // Eliminar asset
   deleteAsset: (id) => api.delete(`/assets/${id}`),
 
-  // Buscar assets
+  // Buscar assets (con autocompletado)
   searchAssets: (query, type = 'stock') =>
-    api.get(`/assets/search/${query}?asset_type=${type}`),
+    api.get(`/assets/search?q=${encodeURIComponent(query)}&type=${type}`),
+
+  // Obtener activos populares
+  getPopularAssets: () => api.get('/popular'),
 
   // Obtener precio actual
   getPrice: (symbol, type = 'stock') =>

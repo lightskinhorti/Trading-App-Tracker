@@ -6,7 +6,21 @@ from pathlib import Path
 import enum
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./portfolio.db")
+# Load environment variables from .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is not set. "
+        "Please set it in your .env file or environment. "
+        "Example: DATABASE_URL=postgresql://user:password@host:5432/database"
+    )
 
 # Create data directory if using SQLite with relative path
 if "sqlite" in DATABASE_URL:
@@ -15,7 +29,17 @@ if "sqlite" in DATABASE_URL:
         db_dir = Path(db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(DATABASE_URL)
+# Configure engine based on database type
+if "postgresql" in DATABASE_URL:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=1800,
+    )
+else:
+    engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -113,14 +113,31 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     return {"message": "Activo eliminado correctamente"}
 
 
+@router.get("/search")
+def search_assets(
+    q: str = Query(..., description="Término de búsqueda (símbolo o nombre)"),
+    type: str = Query("stock", description="Tipo de activo: stock o crypto")
+):
+    """
+    Busca activos por nombre o símbolo.
+    Retorna lista de sugerencias con: symbol, name, type
+    Máximo 10 resultados.
+    """
+    if not q or len(q) < 1:
+        return []
+
+    results = price_service.search_assets(q, type)
+    return results[:10]
+
+
 @router.get("/search/{query}")
-def search_assets(query: str, asset_type: str = "stock"):
-    """Busca activos por nombre o símbolo"""
+def search_assets_legacy(query: str, asset_type: str = "stock"):
+    """Busca activos por nombre o símbolo (endpoint legacy)"""
     if asset_type == "crypto":
         results = price_service.search_crypto(query)
     else:
         results = price_service.search_stock(query)
-    
+
     return results
 
 
